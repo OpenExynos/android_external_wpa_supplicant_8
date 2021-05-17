@@ -174,8 +174,16 @@ int main(int argc, char *argv[])
 	wpa_supplicant_fd_workaround(1);
 
 	for (;;) {
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		// add 'M' option
+		c = getopt(argc, argv,
+			   "b:Bc:C:D:de:f:g:G:hi:I:KLMm:No:O:p:P:qsTtuvW");
+#else
 		c = getopt(argc, argv,
 			   "b:Bc:C:D:de:f:g:G:hi:I:KLm:No:O:p:P:qsTtuvW");
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		if (c < 0)
 			break;
 		switch (c) {
@@ -235,6 +243,14 @@ int main(int argc, char *argv[])
 			license();
 			exitcode = 0;
 			goto out;
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		case 'M':
+			wpa_printf(MSG_INFO, "option M: SUPPORT_OXYGEN_NETWORK");
+			params.ibss_mode = 1;
+			break;
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #ifdef CONFIG_P2P
 		case 'm':
 			params.conf_p2p_dev = optarg;

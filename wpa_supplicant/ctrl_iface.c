@@ -6580,6 +6580,31 @@ static int wpa_supplicant_pktcnt_poll(struct wpa_supplicant *wpa_s, char *buf,
 }
 
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST
+static int wpa_supplicant_driver_cmd(struct wpa_supplicant *wpa_s, char *cmd,
+				     char *buf, size_t buflen)
+{
+	int ret;
+
+	ret = wpa_drv_driver_cmd(wpa_s, cmd, buf, buflen);
+	if (ret == 0) {
+		if (os_strncasecmp(cmd, "COUNTRY", 7) == 0) {
+			struct p2p_data *p2p = wpa_s->global->p2p;
+			if (p2p) {
+				char country[3];
+				country[0] = cmd[8];
+				country[1] = cmd[9];
+				country[2] = 0x04;
+				p2p_set_country(p2p, country);
+			}
+		}
+		ret = sprintf(buf, "%s\n", "OK");
+	}
+	return ret;
+}
+#else /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #ifdef ANDROID
 static int wpa_supplicant_driver_cmd(struct wpa_supplicant *wpa_s, char *cmd,
 				     char *buf, size_t buflen)
@@ -6606,6 +6631,9 @@ static int wpa_supplicant_driver_cmd(struct wpa_supplicant *wpa_s, char *cmd,
 }
 #endif /* ANDROID */
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#endif /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 
 static int wpa_supplicant_vendor_cmd(struct wpa_supplicant *wpa_s, char *cmd,
 				     char *buf, size_t buflen)
@@ -8467,6 +8495,11 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
 							       reply_size);
 #ifndef CONFIG_NO_CONFIG_WRITE
 	} else if (os_strcmp(buf, "SAVE_CONFIG") == 0) {
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		if (wpa_s->global->params.ibss_mode != 1)
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		if (wpa_supplicant_ctrl_iface_save_config(wpa_s))
 			reply_len = -1;
 #endif /* CONFIG_NO_CONFIG_WRITE */
@@ -8573,11 +8606,21 @@ char * wpa_supplicant_ctrl_iface_process(struct wpa_supplicant *wpa_s,
 		if (wpa_supplicant_ctrl_iface_autoscan(wpa_s, buf + 9))
 			reply_len = -1;
 #endif /* CONFIG_AUTOSCAN */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST
+	} else if (os_strncmp(buf, "DRIVER ", 7) == 0) {
+		reply_len = wpa_supplicant_driver_cmd(wpa_s, buf + 7, reply,
+						      reply_size);
+#else /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #ifdef ANDROID
 	} else if (os_strncmp(buf, "DRIVER ", 7) == 0) {
 		reply_len = wpa_supplicant_driver_cmd(wpa_s, buf + 7, reply,
 						      reply_size);
 #endif /* ANDROID */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#endif /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 	} else if (os_strncmp(buf, "VENDOR ", 7) == 0) {
 		reply_len = wpa_supplicant_vendor_cmd(wpa_s, buf + 7, reply,
 						      reply_size);
@@ -9199,6 +9242,11 @@ char * wpa_supplicant_global_ctrl_iface_process(struct wpa_global *global,
 		}
 #ifndef CONFIG_NO_CONFIG_WRITE
 	} else if (os_strcmp(buf, "SAVE_CONFIG") == 0) {
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		if (global->params.ibss_mode != 1)
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		if (wpas_global_ctrl_iface_save_config(global))
 			reply_len = -1;
 #endif /* CONFIG_NO_CONFIG_WRITE */

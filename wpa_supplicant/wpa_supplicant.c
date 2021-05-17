@@ -15,6 +15,11 @@
 #include "common.h"
 #include "crypto/random.h"
 #include "crypto/sha1.h"
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+#include "crypto/sha256.h"
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #include "eapol_supp/eapol_supp_sm.h"
 #include "eap_peer/eap.h"
 #include "eap_peer/eap_proxy.h"
@@ -769,6 +774,16 @@ void wpa_supplicant_set_state(struct wpa_supplicant *wpa_s,
 		wpa_s->extra_blacklist_count = 0;
 		wpa_s->new_connection = 0;
 		wpa_drv_set_operstate(wpa_s, 1);
+
+#if defined(CONFIG_SLSI_KEY_MGMT_OFFLOAD)
+		if (wpa_key_mgmt_wpa_ieee8021x(wpa_s->key_mgmt) &&
+			!wpa_key_mgmt_ft(wpa_s->key_mgmt)) {
+			if (ssid->proactive_key_caching == 1 || wpa_s->conf->okc == 1) {
+				wpa_sm_install_pmk(wpa_s->wpa);
+			}
+		}
+#endif /* CONFIG_SLSI_KEY_MGMT_OFFLOAD */
+
 #ifndef IEEE8021X_EAPOL
 		wpa_drv_set_supp_port(wpa_s, 1);
 #endif /* IEEE8021X_EAPOL */
@@ -2039,6 +2054,16 @@ static void wpas_start_assoc_cb(struct wpa_radio_work *work, int deinit)
 			"0x%x", algs);
 	}
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	/* Set a security type for the Oxygen network */
+	if (ssid->mode == WPAS_MODE_IBSS && ssid->key_mgmt == WPA_KEY_MGMT_PSK) {
+		ssid->key_mgmt = WPA_KEY_MGMT_WPA_NONE;
+		ssid->proto = WPA_PROTO_WPA;
+	}
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
+
 	if (bss && (wpa_bss_get_vendor_ie(bss, WPA_IE_VENDOR_TYPE) ||
 		    wpa_bss_get_ie(bss, WLAN_EID_RSN)) &&
 	    wpa_key_mgmt_wpa(ssid->key_mgmt)) {
@@ -2220,7 +2245,13 @@ static void wpas_start_assoc_cb(struct wpa_radio_work *work, int deinit)
 	}
 #endif /* IEEE8021X_EAPOL */
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	if (wpa_s->key_mgmt == WPA_KEY_MGMT_WPA_NONE && ssid->mode != WPAS_MODE_IBSS) {
+#else
 	if (wpa_s->key_mgmt == WPA_KEY_MGMT_WPA_NONE) {
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		/* Set the key before (and later after) association */
 		wpa_supplicant_set_wpa_none_key(wpa_s, ssid);
 	}
@@ -2245,12 +2276,26 @@ static void wpas_start_assoc_cb(struct wpa_radio_work *work, int deinit)
 		params.ssid_len = ssid->ssid_len;
 	}
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	if (ssid->mode == WPAS_MODE_IBSS && ssid->bssid_set) {
+		ssid->bssid[0] = 0x02;
+#else
 	if (ssid->mode == WPAS_MODE_IBSS && ssid->bssid_set &&
 	    wpa_s->conf->ap_scan == 2) {
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		params.bssid = ssid->bssid;
 		params.fixed_bssid = 1;
 	}
 
+
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	if (ssid->mode == WPAS_MODE_IBSS && ssid->frequency > 0)
+		ssid->fixed_freq = 1;
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 	/* Initial frequency for IBSS/mesh */
 	if ((ssid->mode == WPAS_MODE_IBSS || ssid->mode == WPAS_MODE_MESH) &&
 	    ssid->frequency > 0 && params.freq.freq == 0)
@@ -2388,14 +2433,43 @@ static void wpas_start_assoc_cb(struct wpa_radio_work *work, int deinit)
 		assoc_failed = 1;
 	}
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	if (ssid->mode == WPAS_MODE_IBSS) {
+		ssid->psk_set = 0;
+		if (ssid->passphrase && params.bssid) {
+			u8 key[32];
+			/* Generate IBSS key */
+			if (hmac_sha256(params.bssid, 6, (u8*)ssid->passphrase, os_strlen(ssid->passphrase), key) == 0) {
+				if (hmac_sha256(params.bssid, 6, key, 32, ssid->psk) == 0) {
+					wpa_s->key_mgmt = WPA_KEY_MGMT_WPA_NONE;
+					wpa_s->group_cipher = WPA_CIPHER_CCMP;
+					ssid->psk_set = 1;
+				}
+			}
+		}
+	}
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
+
 	if (wpa_s->key_mgmt == WPA_KEY_MGMT_WPA_NONE) {
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		if (ssid->mode != WPAS_MODE_IBSS)
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		/* Set the key after the association just in case association
 		 * cleared the previously configured key. */
 		wpa_supplicant_set_wpa_none_key(wpa_s, ssid);
 		/* No need to timeout authentication since there is no key
 		 * management. */
 		wpa_supplicant_cancel_auth_timeout(wpa_s);
-		wpa_supplicant_set_state(wpa_s, WPA_COMPLETED);
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		if (ssid->mode != WPAS_MODE_IBSS)
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
+			wpa_supplicant_set_state(wpa_s, WPA_COMPLETED);
 #ifdef CONFIG_IBSS_RSN
 	} else if (ssid->mode == WPAS_MODE_IBSS &&
 		   wpa_s->key_mgmt != WPA_KEY_MGMT_NONE &&
@@ -2501,6 +2575,29 @@ void wpa_supplicant_deauthenticate(struct wpa_supplicant *wpa_s,
 #ifdef CONFIG_TDLS
 	wpa_tdls_teardown_peers(wpa_s->wpa);
 #endif /* CONFIG_TDLS */
+
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	if (wpa_s->global->params.ibss_mode == 1 && wpa_s->current_ssid && wpa_s->current_ssid->mode == WPAS_MODE_IBSS) {
+		static const char* OLSR_CMD_TERMINATE = "TERMINATE";
+		static const int OLSR_CMD_PORT = 60699;
+		int sock = socket(PF_INET, SOCK_DGRAM, 0);
+		if (sock >= 0) {
+			struct sockaddr_in addr;
+			os_memset(&addr, 0, sizeof(addr));
+			addr.sin_family = AF_INET;
+			addr.sin_port = htons(OLSR_CMD_PORT);
+			addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+			if (sendto(sock, OLSR_CMD_TERMINATE, os_strlen(OLSR_CMD_TERMINATE) + 1, 0, (struct sockaddr*)&addr, sizeof(addr)) > 0)
+				wpa_printf(MSG_INFO, "Terminating a routing daemon");
+			else
+				wpa_printf(MSG_ERROR, "Terminating a routing daemon is failed.");
+			close(sock);
+			os_sleep(0, 100000); // OLSR daemon needs some amount of time to finish clean-up sequences.
+		}
+	}
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 
 #ifdef CONFIG_MESH
 	if (wpa_s->ifmsh) {
@@ -4652,6 +4749,12 @@ struct wpa_global * wpa_supplicant_init(struct wpa_params *params)
 	if (params->override_ctrl_interface)
 		global->params.override_ctrl_interface =
 			os_strdup(params->override_ctrl_interface);
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	if (params->ibss_mode > 0)
+		global->params.ibss_mode = params->ibss_mode;
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 	if (params->conf_p2p_dev)
 		global->params.conf_p2p_dev =
 			os_strdup(params->conf_p2p_dev);

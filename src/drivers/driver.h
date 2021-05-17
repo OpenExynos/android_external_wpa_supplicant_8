@@ -2851,6 +2851,20 @@ struct wpa_driver_ops {
 	 */
 	int (*set_authmode)(void *priv, int authmode);
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST
+	/**
+	 * driver_cmd - execute driver-specific command
+	 * @priv: private driver interface data
+	 * @cmd: command to execute
+	 * @buf: return buffer
+	 * @buf_len: buffer length
+	 *
+	 * Returns: 0 on success, -1 on failure
+	 */
+	 int (*driver_cmd)(void *priv, char *cmd, char *buf, size_t buf_len);
+#else /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #ifdef ANDROID
 	/**
 	 * driver_cmd - Execute driver-specific command
@@ -2862,6 +2876,9 @@ struct wpa_driver_ops {
 	 */
 	int (*driver_cmd)(void *priv, char *cmd, char *buf, size_t buf_len);
 #endif /* ANDROID */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#endif /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 
 	/**
 	 * vendor_cmd - Execute vendor specific command

@@ -37,7 +37,9 @@
 #include "radiotap_iter.h"
 #include "rfkill.h"
 #include "driver_nl80211.h"
-
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+#include "common/slsi-vendor.h"
+#endif
 
 #ifndef CONFIG_LIBNL20
 /*
@@ -1916,6 +1918,14 @@ static int nl80211_mgmt_subscribe_non_ap(struct i802_bss *bss)
 	    (nl80211_register_action_frame(bss, (u8 *) "\x05\x02", 2) < 0))
 		ret = -1;
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST
+	/* WES VS Action Frame Registration - for NCHO Unit test */
+	if (nl80211_register_action_frame(bss, (u8 *) "\x7f\x00\x00\xf0", 4) < 0)
+		ret = -1;
+#endif /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
+
 	nl80211_mgmt_handle_register_eloop(bss);
 
 	return ret;
@@ -2476,6 +2486,11 @@ static int issue_key_mgmt_set_key(struct wpa_driver_nl80211_data *drv,
 	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_QCA) ||
 	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
 			QCA_NL80211_VENDOR_SUBCMD_KEY_MGMT_SET_KEY) ||
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_ID, OUI_SAMSUNG) ||
+	    nla_put_u32(msg, NL80211_ATTR_VENDOR_SUBCMD,
+			SLSI_NL80211_VENDOR_SUBCMD_KEY_MGMT_SET_KEY) ||
+#endif
 	    nla_put(msg, NL80211_ATTR_VENDOR_DATA, key_len, key)) {
 		nl80211_nlmsg_clear(msg);
 		nlmsg_free(msg);
@@ -4670,7 +4685,7 @@ static int wpa_driver_nl80211_try_connect(
 	enum nl80211_auth_type type;
 	int ret;
 	int algs;
-
+#ifndef CONFIG_SLSI_KEY_MGMT_OFFLOAD
 	if (params->req_key_mgmt_offload && params->psk &&
 	    (params->key_mgmt_suite == WPA_KEY_MGMT_PSK ||
 	     params->key_mgmt_suite == WPA_KEY_MGMT_PSK_SHA256 ||
@@ -4680,7 +4695,7 @@ static int wpa_driver_nl80211_try_connect(
 		if (ret)
 			return ret;
 	}
-
+#endif
 	wpa_printf(MSG_DEBUG, "nl80211: Connect (ifindex=%d)", drv->ifindex);
 	msg = nl80211_drv_msg(drv, 0, NL80211_CMD_CONNECT);
 	if (!msg)
@@ -8555,11 +8570,19 @@ const struct wpa_driver_ops wpa_driver_nl80211_ops = {
 	.get_noa = wpa_driver_get_p2p_noa,
 	.set_ap_wps_ie = wpa_driver_set_ap_wps_p2p_ie,
 #endif /* ANDROID_P2P */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST
+	.driver_cmd = wpa_driver_nl80211_driver_cmd,
+#else /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #ifdef ANDROID
 #ifndef ANDROID_LIB_STUB
 	.driver_cmd = wpa_driver_nl80211_driver_cmd,
 #endif /* !ANDROID_LIB_STUB */
 #endif /* ANDROID */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#endif /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 	.vendor_cmd = nl80211_vendor_cmd,
 	.set_qos_map = nl80211_set_qos_map,
 	.set_wowlan = nl80211_set_wowlan,

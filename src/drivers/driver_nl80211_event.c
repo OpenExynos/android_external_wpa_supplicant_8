@@ -18,7 +18,10 @@
 #include "common/ieee802_11_defs.h"
 #include "common/ieee802_11_common.h"
 #include "driver_nl80211.h"
-
+#if defined(CONFIG_SLSI_KEY_MGMT_OFFLOAD) || defined(CONFIG_SLSI_HANGED_EVENT)
+#include "common/slsi-vendor.h"
+#include "android_drv.h"
+#endif
 
 static const char * nl80211_command_to_string(enum nl80211_commands cmd)
 {
@@ -1567,7 +1570,52 @@ static void qca_nl80211_acs_select_ch(struct wpa_driver_nl80211_data *drv,
 	wpa_supplicant_event(drv->ctx, EVENT_ACS_CHANNEL_SELECTED, &event);
 }
 
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+static void slsi_nl80211_key_mgmt_auth(struct wpa_driver_nl80211_data *drv,
+				      const u8 *data, size_t len)
+{
+	struct nlattr *tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_MAX + 1];
+	u8 *bssid;
+	struct wpa_driver_nl80211_data *wlan0_drv = NULL, *tmp;
 
+	/* roaming is issued only on wlan0. But the drv function parameter
+	 * might be corresponding to other interface(depends on the order of
+	 * interface supplied in supplicant command line option).
+	 * So, get struct wpa_driver_nl80211_data corresponding to wlan0.
+	 */
+	dl_list_for_each_safe(wlan0_drv, tmp, &drv->global->interfaces,
+			      struct wpa_driver_nl80211_data, list){
+		if (os_strcmp(wlan0_drv->first_bss->ifname, "wlan0") == 0)
+			break;
+	}
+	if (!wlan0_drv) {
+		wpa_printf(MSG_ERROR,
+		   "nl80211: [slsi vendor] could not get wlan0 drv");
+		return;
+	}
+
+	wpa_printf(MSG_DEBUG,
+		   "nl80211: Key management roam+auth vendor event received");
+	if (nla_parse(tb, SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_MAX,
+		      (struct nlattr *) data, len, NULL) ||
+	    !tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_BSSID] ||
+	    nla_len(tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_BSSID]) != ETH_ALEN ||
+	    !tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_REQ_IE] ||
+	    !tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_RESP_IE])
+		return;
+	bssid = nla_data(tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_BSSID]);
+	wpa_printf(MSG_DEBUG, "  * roam BSSID " MACSTR, MAC2STR(bssid));
+
+	mlme_event_connect(wlan0_drv, NL80211_CMD_ROAM, NULL,
+			   tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_BSSID],
+			   tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_REQ_IE],
+			   tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_RESP_IE],
+			   tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_AUTHORIZED],
+			   NULL,
+			   tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_PTK_KCK],
+			   tb[SLSI_WLAN_VENDOR_ATTR_ROAM_AUTH_PTK_KEK]);
+}
+#endif
 static void qca_nl80211_key_mgmt_auth(struct wpa_driver_nl80211_data *drv,
 				      const u8 *data, size_t len)
 {
@@ -1685,7 +1733,50 @@ static void qca_nl80211_dfs_offload_radar_event(
 	}
 }
 
+#if defined(CONFIG_SLSI_KEY_MGMT_OFFLOAD) || defined(CONFIG_SLSI_HANGED_EVENT)
+static void nl80211_vendor_event_slsi(struct wpa_driver_nl80211_data *drv,
+				      u32 subcmd, u8 *data, size_t len)
+{
+	struct wpa_driver_nl80211_data *wlan0_drv = NULL, *tmp;
 
+	switch (subcmd) {
+	case SLSI_NL80211_VENDOR_SUBCMD_KEY_MGMT_ROAM_AUTH:
+		slsi_nl80211_key_mgmt_auth(drv, data, len);
+		break;
+	case SLSI_NL80211_VENDOR_HANGED_EVENT:
+	{
+
+		struct nlattr *tb[SLSI_WLAN_VENDOR_ATTR_HANGED_EVENT_MAX];
+		u16 panic_code;
+		/* HANGED event has to be sent only on wlan0 interface */
+		dl_list_for_each_safe(wlan0_drv, tmp, &drv->global->interfaces,
+				      struct wpa_driver_nl80211_data, list) {
+			if (os_strcmp(wlan0_drv->first_bss->ifname, "wlan0") == 0)
+				break;
+		}
+		if (!wlan0_drv) {
+			wpa_printf(MSG_ERROR,
+				   "nl80211: [slsi vendor] could not get wlan0 drv for hang event");
+			break;
+		}
+		wpa_printf(MSG_DEBUG, "nl80211: SLSI_NL80211_VENDOR_HANGED_EVENT");
+		if (nla_parse(tb, SLSI_WLAN_VENDOR_ATTR_HANGED_EVENT_MAX-1,(struct nlattr *) data, len, NULL)
+			|| !tb[SLSI_WLAN_VENDOR_ATTR_HANGED_EVENT_PANIC_CODE]) {
+			wpa_printf(MSG_ERROR, "Failure in nl_parse\n");
+			return;
+		}
+
+		panic_code = nla_get_u16(tb[SLSI_WLAN_VENDOR_ATTR_HANGED_EVENT_PANIC_CODE]);
+		wpa_msg(wlan0_drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "HANGED %d",panic_code);
+		break;
+	}
+	default:
+		wpa_printf(MSG_DEBUG,
+			   "nl80211: Ignore unsupported SLSI vendor event %u", subcmd);
+		break;
+	}
+}
+#endif
 static void nl80211_vendor_event_qca(struct wpa_driver_nl80211_data *drv,
 				     u32 subcmd, u8 *data, size_t len)
 {
@@ -1753,6 +1844,11 @@ static void nl80211_vendor_event(struct wpa_driver_nl80211_data *drv,
 	}
 
 	switch (vendor_id) {
+#if defined(CONFIG_SLSI_KEY_MGMT_OFFLOAD) || defined(CONFIG_SLSI_HANGED_EVENT)
+	case OUI_SAMSUNG:
+		nl80211_vendor_event_slsi(drv, subcmd, data, len);
+		break;
+#endif
 	case OUI_QCA:
 		nl80211_vendor_event_qca(drv, subcmd, data, len);
 		break;
@@ -1834,7 +1930,6 @@ static void do_process_drv_event(struct i802_bss *bss, int cmd,
 
 	wpa_printf(MSG_DEBUG, "nl80211: Drv Event %d (%s) received for %s",
 		   cmd, nl80211_command_to_string(cmd), bss->ifname);
-
 	if (cmd == NL80211_CMD_ROAM &&
 	    (drv->capa.flags & WPA_DRIVER_FLAGS_KEY_MGMT_OFFLOAD)) {
 		/*
@@ -1846,7 +1941,6 @@ static void do_process_drv_event(struct i802_bss *bss, int cmd,
 			   cmd);
 		return;
 	}
-
 	if (drv->ap_scan_as_station != NL80211_IFTYPE_UNSPECIFIED &&
 	    (cmd == NL80211_CMD_NEW_SCAN_RESULTS ||
 	     cmd == NL80211_CMD_SCAN_ABORTED)) {

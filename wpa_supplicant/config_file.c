@@ -1335,6 +1335,13 @@ int wpa_config_write(const char *name, struct wpa_config *config)
 	}
 
 	for (ssid = config->ssid; ssid; ssid = ssid->next) {
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		if (ssid->mode == WPAS_MODE_IBSS)
+			continue;
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
+
 		if (ssid->key_mgmt == WPA_KEY_MGMT_WPS || ssid->temporary)
 			continue; /* do not save temporary networks */
 		if (wpa_key_mgmt_wpa_psk(ssid->key_mgmt) && !ssid->psk_set &&

@@ -2755,12 +2755,23 @@ static int wpa_cli_cmd_raw(struct wpa_ctrl *ctrl, int argc, char *argv[])
 }
 
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST
+static int wpa_cli_cmd_driver(struct wpa_ctrl *ctrl, int argc, char *argv[])
+{
+	return wpa_cli_cmd(ctrl, "DRIVER", 1, argc, argv);
+}
+#else /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #ifdef ANDROID
 static int wpa_cli_cmd_driver(struct wpa_ctrl *ctrl, int argc, char *argv[])
 {
 	return wpa_cli_cmd(ctrl, "DRIVER", 1, argc, argv);
 }
 #endif /* ANDROID */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#endif /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 
 
 static int wpa_cli_cmd_vendor(struct wpa_ctrl *ctrl, int argc, char *argv[])
@@ -3334,10 +3345,19 @@ static const struct wpa_cli_cmd wpa_cli_commands[] = {
 	  "<params..> = Sent unprocessed command" },
 	{ "flush", wpa_cli_cmd_flush, NULL, cli_cmd_flag_none,
 	  "= flush wpa_supplicant state" },
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST
+	{ "driver", wpa_cli_cmd_driver, NULL, cli_cmd_flag_none,
+	  "<command> = driver private commands" },
+#else /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 #ifdef ANDROID
 	{ "driver", wpa_cli_cmd_driver, NULL, cli_cmd_flag_none,
 	  "<command> = driver private commands" },
 #endif /* ANDROID */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#endif /* CONFIG_SAMSUNG_SCSC_WIFIBT_UNIT_TEST */
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 	{ "radio_work", wpa_cli_cmd_radio_work, NULL, cli_cmd_flag_none,
 	  "= radio_work <show/add/done>" },
 	{ "vendor", wpa_cli_cmd_vendor, NULL, cli_cmd_flag_none,

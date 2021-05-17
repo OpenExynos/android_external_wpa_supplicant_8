@@ -864,7 +864,9 @@ int wpa_driver_nl80211_capa(struct wpa_driver_nl80211_data *drv)
 		 */
 		drv->capa.flags |= WPA_DRIVER_FLAGS_AP_MLME;
 	}
-
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+	drv->capa.flags |= WPA_DRIVER_FLAGS_KEY_MGMT_OFFLOAD;
+#endif
 	drv->device_ap_sme = info.device_ap_sme;
 	drv->poll_command_supported = info.poll_command_supported;
 	drv->data_tx_status = info.data_tx_status;

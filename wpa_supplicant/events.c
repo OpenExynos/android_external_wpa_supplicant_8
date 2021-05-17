@@ -45,6 +45,11 @@
 #include "mesh.h"
 #include "mesh_mpm.h"
 #include "wmm_ac.h"
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+#include "ctrl_iface.h"
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 
 
 #ifndef CONFIG_NO_SCAN_PROCESSING
@@ -319,9 +324,22 @@ static void wpa_find_assoc_pmkid(struct wpa_supplicant *wpa_s)
 		return;
 
 	for (i = 0; i < ie.num_pmkid; i++) {
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+		/* store the PMKID so pass the SSID and BSSSID and try_opportunistic as 1 */
+		wpa_dbg(wpa_s, MSG_INFO, "RSN: proactive_key_caching(%i), okc(%i) ",
+				wpa_s->current_ssid->proactive_key_caching, wpa_s->conf->okc);
+		pmksa_set = pmksa_cache_set_current(wpa_s->wpa,
+						ie.pmkid + i * PMKID_LEN,
+						wpa_s->bssid,
+						wpa_s->current_ssid,
+						wpa_s->current_ssid->proactive_key_caching < 0 ?
+						wpa_s->conf->okc : wpa_s->current_ssid->proactive_key_caching);
+
+#else
 		pmksa_set = pmksa_cache_set_current(wpa_s->wpa,
 						    ie.pmkid + i * PMKID_LEN,
 						    NULL, NULL, 0);
+#endif
 		if (pmksa_set == 0) {
 			eapol_sm_notify_pmkid_attempt(wpa_s->eapol);
 			break;
@@ -1570,6 +1588,13 @@ static int wpas_select_network_from_last_scan(struct wpa_supplicant *wpa_s,
 			wpa_supplicant_associate(wpa_s, NULL, ssid);
 			if (new_scan)
 				wpa_supplicant_rsn_preauth_scan_results(wpa_s);
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+			if (wpa_s->wpa_state >= WPA_ASSOCIATING
+					&& wpa_s->current_ssid && wpa_s->current_ssid->mode == WPAS_MODE_IBSS)
+				return 1;
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		} else if (own_request) {
 			/*
 			 * No SSID found. If SCAN results are as a result of
@@ -1688,8 +1713,17 @@ int wpa_supplicant_fast_associate(struct wpa_supplicant *wpa_s)
 #else /* CONFIG_NO_SCAN_PROCESSING */
 	struct os_reltime now;
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	if (!(wpa_s->current_ssid && wpa_s->current_ssid->mode == WPAS_MODE_IBSS)) {
+		if (wpa_s->last_scan_res_used == 0)
+			return -1;
+	}
+#else
 	if (wpa_s->last_scan_res_used == 0)
 		return -1;
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 
 	os_get_reltime(&now);
 	if (os_reltime_expired(&now, &wpa_s->last_scan, 5)) {
@@ -2061,8 +2095,16 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 	eloop_cancel_timeout(wpas_network_reenabled, wpa_s, NULL);
 
 	ft_completed = wpa_ft_is_completed(wpa_s->wpa);
+#ifndef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+	/* commenting this as SSID and BSSID is not yet initialized.
+	 * wpa_supplicant_event_associnfo() calls wpa_find_assoc_pmkid().
+	 * It needs to cache the latest PMKID for that it requires SSID and
+	 * BSSID. So move this function call
+	 * after supplicant gets the SSID and BSSID.
+	 */
 	if (data && wpa_supplicant_event_associnfo(wpa_s, data) < 0)
 		return;
+#endif
 
 	if (wpa_drv_get_bssid(wpa_s, bssid) < 0) {
 		wpa_dbg(wpa_s, MSG_ERROR, "Failed to get BSSID");
@@ -2070,6 +2112,32 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 			wpa_s, WLAN_REASON_DEAUTH_LEAVING);
 		return;
 	}
+
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+	/* If the old bss is non-NULL & connection is FT then lower layers did the 4-way handshake */
+	if (wpa_s->wpa_state == WPA_COMPLETED && wpa_key_mgmt_ft(wpa_s->key_mgmt)) {
+		if (os_memcmp(bssid, wpa_s->bssid, ETH_ALEN) != 0 &&
+		   !is_zero_ether_addr(bssid)) {
+			wpa_dbg(wpa_s, MSG_DEBUG, "FT: Assume FT reassoc completed by driver %d", ft_completed);
+
+			wpa_supplicant_set_state(wpa_s, WPA_ASSOCIATED);
+			wpa_dbg(wpa_s, MSG_DEBUG, "Associated to a new BSS: BSSID="
+			        MACSTR, MAC2STR(bssid));
+			random_add_randomness(bssid, ETH_ALEN);
+			os_memcpy(wpa_s->bssid, bssid, ETH_ALEN);
+			os_memset(wpa_s->pending_bssid, 0, ETH_ALEN);
+			wpas_notify_bssid_changed(wpa_s);
+			wpa_sm_notify_slsi_ft_reassoc(wpa_s->wpa, bssid);
+			wpa_supplicant_set_state(wpa_s, WPA_COMPLETED);
+			return;
+		}
+	}
+
+	/* the driver handles the re-assocs, so pass down the PMK. */
+	if (wpa_key_mgmt_wpa_psk(wpa_s->key_mgmt)) {
+		wpa_sm_install_pmk(wpa_s->wpa);
+	}
+#endif
 
 	wpa_supplicant_set_state(wpa_s, WPA_ASSOCIATED);
 	if (os_memcmp(bssid, wpa_s->bssid, ETH_ALEN) != 0) {
@@ -2101,7 +2169,11 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 			wpa_msg(wpa_s, MSG_WARNING,
 				"WPA/RSN IEs not updated");
 	}
-
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+	/* for OKC: moved this call here after SSID and BSSID are initialized  */
+	if (data && wpa_supplicant_event_associnfo(wpa_s, data) < 0)
+		return;
+#endif
 #ifdef CONFIG_SME
 	os_memcpy(wpa_s->sme.prev_bssid, bssid, ETH_ALEN);
 	wpa_s->sme.prev_bssid_set = 1;
@@ -2149,10 +2221,31 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 			 * Set the key after having received joined-IBSS event
 			 * from the driver.
 			 */
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+			wpa_printf(MSG_INFO, "Set IBSS key\n");
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 			wpa_supplicant_set_wpa_none_key(wpa_s,
 							wpa_s->current_ssid);
 		}
 		wpa_supplicant_cancel_auth_timeout(wpa_s);
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+		if (wpa_s->current_ssid && wpa_s->current_ssid->mode == IEEE80211_MODE_IBSS) {
+			size_t resp_len = 0;
+			char *cmd = "DRIVER SETIBSSBEACONOUIDATA 001632 4001";
+			char *reply = wpa_supplicant_ctrl_iface_process(wpa_s, cmd, &resp_len);
+			if (reply) {
+				if (resp_len >= 2 && os_strncmp(reply, "OK", 2) == 0)
+					wpa_printf(MSG_INFO, "Oxygen VSIE added\n");
+				else
+					wpa_printf(MSG_ERROR, "Oxygen VSIE add failed\n");
+				os_free(reply);
+			}
+		}
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
 		wpa_supplicant_set_state(wpa_s, WPA_COMPLETED);
 	} else if (!ft_completed) {
 		/* Timeout for receiving the first EAPOL packet */

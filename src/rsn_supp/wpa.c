@@ -2963,3 +2963,27 @@ void wpa_sm_set_ptk_kck_kek(struct wpa_sm *sm,
 	}
 	sm->ptk_set = 1;
 }
+
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+void wpa_sm_install_pmk(struct wpa_sm *sm)
+{
+	/* the driver wants to handle re-assocs, pass down the PMK to driver */
+	if (wpa_sm_set_key(sm, WPA_ALG_PMK, NULL, 0, 0, NULL, 0, (u8*)sm->pmk, sm->pmk_len) < 0) {
+		wpa_hexdump(MSG_DEBUG, "PSK: Install PMK to the driver for driver reassociations",
+			(u8*)sm->pmk, sm->pmk_len);
+		/* No harm if the driver doesn't support. */
+		wpa_msg(sm->ctx->msg_ctx, MSG_DEBUG,
+			"WPA: Failed to set PMK to the driver (keylen=%zd)", sm->pmk_len);
+	}
+}
+
+void wpa_sm_notify_slsi_ft_reassoc(struct wpa_sm *sm, const u8 *bssid){
+	wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,
+		"WPA: SCSC FT Reassociation event - clear replay counter");
+	os_memcpy(sm->bssid, bssid, ETH_ALEN);
+	os_memset(sm->rx_replay_counter, 0, WPA_REPLAY_COUNTER_LEN);
+	sm->ft_completed = 1;
+	sm->rx_replay_counter_set = 0;
+}
+#endif
+

@@ -25,7 +25,7 @@ struct wpa_sm_ctx {
 
 	void (*set_state)(void *ctx, enum wpa_states state);
 	enum wpa_states (*get_state)(void *ctx);
-	void (*deauthenticate)(void * ctx, int reason_code); 
+	void (*deauthenticate)(void * ctx, int reason_code);
 	int (*set_key)(void *ctx, enum wpa_alg alg,
 		       const u8 *addr, int key_idx, int set_tx,
 		       const u8 *seq, size_t seq_len,
@@ -159,6 +159,11 @@ void wpa_sm_set_rx_replay_ctr(struct wpa_sm *sm, const u8 *rx_replay_counter);
 void wpa_sm_set_ptk_kck_kek(struct wpa_sm *sm,
 			    const u8 *ptk_kck, size_t ptk_kck_len,
 			    const u8 *ptk_kek, size_t ptk_kek_len);
+
+#ifdef CONFIG_SLSI_KEY_MGMT_OFFLOAD
+void wpa_sm_notify_slsi_ft_reassoc(struct wpa_sm *sm, const u8 *bssid);
+void wpa_sm_install_pmk(struct wpa_sm *sm);
+#endif
 
 #else /* CONFIG_NO_WPA */
 

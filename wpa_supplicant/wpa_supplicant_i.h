@@ -217,6 +217,12 @@ struct wpa_params {
 	 */
 	char *entropy_file;
 
+/* SCSC_INTERNAL START -> Do not integrate to customer branches */
+#ifdef CONFIG_SAMSUNG_SCSC_WIFIBT_OXYGEN_UNIT_TEST
+	int ibss_mode;
+#endif
+/* SCSC_INTERNAL END -> Do not integrate to customer branches */
+
 #ifdef CONFIG_P2P
 	/**
 	 * conf_p2p_dev - Configuration file used to hold the
